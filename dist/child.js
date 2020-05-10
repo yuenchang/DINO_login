@@ -1,6 +1,5 @@
-$('#text').html("下一頁");
-
-var socket = io('ws://192.168.209.37:6554');
+var wip = "ws://" + window.location.host;
+var socket = io(wip);
 
 
 $(document).ready(function (){
@@ -18,7 +17,7 @@ socket.on('appear_egg', function(data){
 				
     }
 })
-  function getCookie(name) {
+function getCookie(name) {
     var value = "; " + document.cookie;
     var parts = value.split("; " + name + "=");
     if (parts.length == 2) return parts.pop().split(";").shift();

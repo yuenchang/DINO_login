@@ -21,7 +21,8 @@ firebase.initializeApp(firebaseConfig);
 const database = firebase.database();
 
 http.listen(port, () => {
-  console.log(`Only Only UUU: ${port}`)
+  console.log(`port: ${port}`)
+  
 })
 
 
@@ -36,15 +37,16 @@ app.get('/register', (req, res) => {
   database.ref(search2).once('value',v=>{
     var user_num = v.val();
     user_num++;
-    //var paths = '/kid_test/'+user_num+'/';
     var input = {
-      //id: req.query.id,
+      //處理register傳來的資料
       password:req.query.password,
       parent_password: req.query.parent_password,
       birthday: req.query.birthday,
-      nickname: req.query.nickname
+      nickname: req.query.nickname,
+      letter: '', 
+      score: 0
     }      
-    //var reff = database.ref(paths);
+    // 將register資料寫入資料庫
     var reff = database.ref('account/'+req.query.id);
     reff.set(input);
 
@@ -62,15 +64,15 @@ app.get('/login',(req, res) =>{
 			var birthday = data.val().birthday
 			console.log(typeof(nickname))
 			console.log(nickname)
-      		res.send(`
-        		{
-          			"text": "<h1> choose your identity </h1>",
-		  			"pwd": "${pwd}",
-					"nickname": "${nickname}",
-					"birthday": "${birthday}",
-          			"exist": true
-        		}
-      		`)
+      res.send(`
+        {
+            "text": "<h1> choose your identity </h1>",
+            "pwd": "${pwd}",
+            "nickname": "${nickname}",
+            "birthday": "${birthday}",
+            "exist": true
+        }
+      `)
 		}
 	});
     }
@@ -116,11 +118,9 @@ io.on('connection', function(socket) {
                       }
         })
 
-
+    /* SHAKE以下是廢物 */ 
     socket.on('shake', function(data) {
-
           console.log('搖呀'+data.username);
-
           var e = true;
           for (var i = 0; i < shakers.length; i++) {
                   if (shakers[i].username === data.username) {
@@ -139,16 +139,110 @@ io.on('connection', function(socket) {
                   s=0
                   shakers=[]
                 }
-        })
+      })
+
 
     socket.on('sendMessage', function(data) {
-          console.log('target is '+data.target);
-          io.sockets.emit('receiveMessage', data);
+      console.log('target is '+data.target);
+      io.sockets.emit('receiveMessage', data);
         })
-
+    /* 廢物結束 */
+    
+    /* 當故事講完，顯示出蛋蛋 */
     socket.on('end_story', function(data){
-          console.log("story end");
-          io.sockets.emit('appear_egg', data);
+      console.log("story end");
+      io.sockets.emit('appear_egg', data);
     })  
 
-})
+    /********************************** 這邊以後是信件的code *************************************/
+    socket.on('send_letter', function(data){
+      console.log(data);
+
+
+      //database.ref('account/'+data.ID+'/').once('value',data=>{
+      var reff = database.ref('account/'+data.ID);
+      database.ref('account/'+data.ID).once('value',db=>{
+        var letters;
+        if(db.val().letter){
+          letters = db.val().letter;
+        }else{
+          letters = [];
+        }
+        
+        var d = new Date();
+        var n = d.getMonth();
+        n = n+1;
+        var date = n + "/" + d.getDate();
+        console.log(date);
+
+        letters.push({
+          content:data.Letter,
+          date: date,
+          read:false,
+          letter_id: db.val().letter.length
+        })
+
+        var input = {
+          password:db.val().password,
+          parent_password: db.val().parent_password,
+          birthday: db.val().birthday,
+          nickname: db.val().nickname,
+          letter: letters
+        }
+        reff.set(input);
+        console.log(letters)
+      });
+    })
+
+  // check database 有沒有未讀信件
+    socket.on('check_letter', function(data){  
+      database.ref('account/'+data.ID).once('value',db=>{
+        for(var i=0; i< db.val().letter.length; i++)
+        {
+          if(db.val().letter[i].read == false)
+          {
+            socket.emit('letter_unread', data);
+            break;
+          }
+        }
+      });
+    })
+
+    // 傳給client沒有讀過得信件內容
+    socket.on('give_me_letter', function(data){
+      var letters = [];
+      database.ref('account/'+data.ID).once('value',db=>{
+        var j = 0;
+        for(var i=0; i< db.val().letter.length; i++)
+        {
+          if(db.val().letter[i].read == false)
+          {
+            letters.push({
+              content:db.val().letter[i].content,
+              date: db.val().letter[i].date,
+              letter_id: db.val().letter[i].letter_id
+            });
+
+            //socket.emit('letter_unread', data);
+            //break;
+          }
+        }
+        console.log(letters);
+        socket.emit('give_you_letter', {ID:data.ID, Letters:letters});
+      });
+    })
+
+    socket.on('score_letter', function(data){
+      //console.log(data.score);
+      database.ref('account/'+data.ID+'/letter/'+data.letter_id+'/read').set(true);
+
+      database.ref('account/'+data.ID+'/score').once('value',db=>{
+        var s = db.val();
+        s+=data.score;
+        database.ref('account/'+data.ID+'/score').set(s);
+      });
+    })
+
+    /* 信件結束 */
+    
+}) //connection
